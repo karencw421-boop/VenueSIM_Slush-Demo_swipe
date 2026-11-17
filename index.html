@@ -1,0 +1,882 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Vinyl Record 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<style>
+/* Layout: one dark room tinted by the record on the platter; record centred, arrows at its sides, a slim control strip below */
+:root{
+  --bg:#0c0504; --stage:#130806; --accent:#c23a22; --fg:#efe6d6; --muted:#b8ab98; --line:rgba(239,230,214,.18);
+  --display:"Fraunces", Georgia, serif; --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* Apfel Grotezk when available (installed, or embedded below once the font file is supplied); Hanken Grotesk stands in */
+  --sans:"Apfel Grotezk","Apfel Grotesk","Hanken Grotesk",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);display:flex;flex-direction:column;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px;box-sizing:border-box;gap:12px;
+  transition:background-color .9s ease}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(22px,4vw,32px);margin:0;text-wrap:balance;letter-spacing:-.01em}
+.edition{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-variant-numeric:tabular-nums}
+.edition b{color:var(--fg);font-weight:600}
+#stage{flex:1;min-height:320px;position:relative;background:var(--stage);border-radius:6px;overflow:hidden;transition:background-color .9s ease}
+#stage>.arrow,#stage>.meta,#stage>.hint,#stage>.creditsLink,#stage>.dial{z-index:2}
+#stage::after{content:"";z-index:1;position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 60% 55% at 50% 45%,rgba(255,240,220,.10),transparent 70%)}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none;position:relative}
+.arrow{position:absolute;top:50%;transform:translateY(-50%);width:58px;height:58px;border-radius:50%;
+  border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--fg);font:400 27px/1 var(--sans);cursor:pointer;
+  display:grid;place-items:center;padding:0;transition:background-color .2s,border-color .2s}
+.arrow:hover{background:rgba(0,0,0,.45);border-color:var(--fg)}
+#prev{left:max(12px,env(safe-area-inset-left,0px))}
+#next{right:max(12px,env(safe-area-inset-right,0px))}
+.hint{position:absolute;left:max(clamp(16px,3.5vw,46px),env(safe-area-inset-left,0px));right:auto;bottom:6%;text-align:left;font-size:clamp(15px,1.6vw,20px);font-weight:400;color:rgba(239,230,214,.55);pointer-events:none;transition:opacity .4s}
+/* Record details, set large in the top corners: grey label over white value */
+.meta{position:absolute;top:clamp(16px,3.5vw,40px);display:flex;flex-direction:column;line-height:1.04;font-weight:500;
+  font-size:clamp(30px,4.4vw,58px);letter-spacing:-.01em;pointer-events:none}
+.meta .k{color:rgba(239,239,242,.55)} .meta .v{color:#f6f5f2;transition:opacity .35s ease}
+.meta{transition:opacity .5s ease}
+#stage.listening .meta{opacity:0}   /* venue and genre step aside while a record is out */
+/* Credits: a link in the bottom-right corner while choosing a record, opening a full-screen page */
+.creditsLink{position:absolute;right:max(clamp(16px,3.5vw,46px),env(safe-area-inset-right,0px));bottom:6%;background:none;border:0;padding:6px 0;
+  font:400 clamp(15px,1.6vw,20px)/1.2 var(--sans);color:rgba(239,230,214,.55);cursor:pointer;transition:opacity .5s ease,color .2s}
+.creditsLink:hover{color:#f6f5f2}
+#stage.listening .creditsLink{opacity:0;pointer-events:none}
+.credits{position:fixed;inset:0;z-index:50;background:var(--bg);color:#f6f5f2;display:flex;flex-direction:column;
+  padding-top:max(clamp(16px,3.5vw,40px),env(safe-area-inset-top,0px));padding-bottom:max(clamp(20px,4vw,52px),env(safe-area-inset-bottom,0px));
+  padding-left:max(clamp(16px,3.5vw,46px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,3.5vw,46px),env(safe-area-inset-right,0px));
+  opacity:0;visibility:hidden;transition:opacity .5s ease,visibility 0s linear .5s;overflow-y:auto}
+.credits.open{opacity:1;visibility:visible;transition:opacity .5s ease,visibility 0s}
+.credits h2{margin:0;font-weight:500;font-size:clamp(30px,4.4vw,58px);line-height:1.04;letter-spacing:-.01em;color:rgba(239,239,242,.55)}
+.credits .groups{display:flex;flex-direction:column;gap:clamp(40px,6vw,82px);margin-top:clamp(60px,10vw,140px)}
+.credits .k{display:block;color:rgba(239,239,242,.55)}
+.credits p{margin:0;font-size:clamp(17px,2vw,27px);line-height:1.5;font-weight:500;max-width:60ch;text-wrap:balance}
+.credits .photo{margin-top:auto;padding-top:48px;color:rgba(239,239,242,.55)}
+.credits .back{position:absolute;right:max(clamp(16px,3.5vw,46px),env(safe-area-inset-right,0px));top:max(clamp(16px,3.5vw,40px),env(safe-area-inset-top,0px));
+  background:none;border:1px solid rgba(239,230,214,.25);border-radius:999px;color:#f6f5f2;font:400 clamp(15px,1.6vw,20px)/1 var(--sans);padding:.6em 1.1em;cursor:pointer}
+.credits .back:hover{border-color:#f6f5f2}
+.creditsLink:focus-visible,.credits .back:focus-visible{outline:2px solid #f6f5f2;outline-offset:4px}
+.meta.l{left:max(clamp(16px,3.5vw,46px),env(safe-area-inset-left,0px))}
+.meta.r{right:max(clamp(16px,3.5vw,46px),env(safe-area-inset-right,0px));text-align:left}
+.meta .v{display:block;white-space:pre;transition:opacity .35s ease}
+/* slot-machine letters: each letter rolls through a short reel and lands on the new word */
+.reel{display:inline-block;height:1.04em;overflow:hidden;vertical-align:top;text-align:center;transition:width .5s cubic-bezier(.3,.7,.2,1)}
+.reel>span{display:flex;flex-direction:column;transition:transform var(--t,700ms) cubic-bezier(.2,.75,.25,1.08)}
+.reel>span>span{height:1.04em;line-height:1.04em;white-space:pre}
+/* Processing dial: a cream knob with a black pointer, unprocessed at full left, processed at full right */
+.dial{position:absolute;right:max(84px,calc(env(safe-area-inset-right,0px) + 84px));top:50%;width:220px;transform:translate(0,-98px) scale(.94);transform-origin:50% 98px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;pointer-events:none;transition:opacity .5s ease,transform .5s ease}
+.dial.on{opacity:1;pointer-events:auto;transform:translate(0,-98px) scale(1)}
+.dial svg{width:196px;height:196px;display:block;touch-action:none;cursor:grab;border-radius:50%}
+.dial svg:active{cursor:grabbing}
+.dial svg:focus-visible{outline:2px solid var(--fg);outline-offset:4px}
+.dial .knob{fill:#fdfcf8}
+.dial .ptr{fill:#4d4d4d}
+.dial .gauge{fill:none;stroke:var(--accent);stroke-width:5;transition:stroke .9s ease}   /* how far processing is turned up, in the record's colour */
+.dial .tick{display:none}
+.dial .track{fill:none;stroke:rgba(239,230,214,.3);stroke-width:5}   /* the empty gauge: shows how far it can be filled */
+.dial .labels{display:none;justify-content:space-between;width:240px;font-size:13px;letter-spacing:.02em;color:var(--fg);font-weight:500}
+.dial .cue{position:absolute;left:-40px;right:-40px;bottom:calc(100% + 14px);text-align:center;font-size:clamp(16px,1.6vw,21px);
+  color:#f6f5f2;transition:opacity .5s ease;pointer-events:none}
+.dial .cue.done{opacity:0}   /* fades once the dial has been turned */
+.dial .val{font-size:clamp(16px,1.6vw,21px);color:rgba(239,230,214,.55);font-variant-numeric:tabular-nums}
+@media (max-width:760px){.dial{right:50%;top:auto;bottom:16px;transform:translate(50%,0) scale(.94);width:150px;gap:6px}
+  .dial.on{transform:translate(50%,0) scale(1)} .dial svg{width:104px;height:104px} .dial .labels{width:220px} .dial .val{display:none}
+  .hint{bottom:auto;top:calc(clamp(16px,3.5vw,40px) + 2.3em * 2.2)} .meta{font-size:26px}}
+.panel{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;border-top:1px solid var(--line);padding-top:12px}
+.group{display:flex;align-items:center;gap:6px}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-right:4px}
+button{font:500 13px var(--mono);color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:4px;padding:6px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.panel button:hover{border-color:var(--fg)}
+.panel button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+#play{min-width:84px}
+.panel #play[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;transition:background-color .9s,border-color .9s}
+.panel .dot{width:24px;height:24px;padding:0;border-radius:50%;border:2px solid transparent;background:var(--c);background-clip:padding-box}
+.panel .dot[aria-pressed="true"]{border-color:var(--fg);background:var(--c);background-clip:padding-box}
+</style>
+<style>html,body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+
+
+<header hidden>
+  <h1>Vinyl Record, 12″ LP</h1>
+  <span class="edition" aria-live="polite"><b id="edName">Blue</b> · <span id="edNum">1 / 2</span></span>
+</header>
+<div id="stage">
+  <button class="arrow" id="prev" aria-label="Previous record">‹</button>
+  <button class="arrow" id="next" aria-label="Next record">›</button>
+  <div class="meta l" id="metaL"><span class="k">Venue</span><span class="v" id="venue">Arena</span></div>
+  <div class="meta r" id="metaR"><span class="k">Genre</span><span class="v" id="genre">Rock</span></div>
+  <div class="hint" id="hint">Click the record to listen</div>
+  <button class="creditsLink" id="creditsLink">Credits</button>
+  <div class="dial" id="dial">
+    <div class="cue" id="cue">Turn the dial</div>
+    <svg viewBox="-110 -110 220 220" id="knob" role="slider" tabindex="0" aria-label="Processing" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+      <g id="ticks"></g>
+      <circle class="knob" r="86"></circle>
+      <path class="track" d="M-71.42 71.42 A101 101 0 1 1 71.42 71.42"></path>
+      <path class="gauge" id="gauge" d=""></path>
+      <circle class="ptr" id="ptr" cx="0" cy="-53" r="17"></circle>
+    </svg>
+    <div class="labels"><span>UNPROCESSED</span><span>PROCESSED</span></div>
+    <div class="val" id="dialVal">50%</div>
+  </div>
+</div>
+<div class="panel" hidden>   <!-- controls kept for their logic, not shown -->
+  <div class="group">
+    <button id="play" aria-pressed="true">■ Stop</button>
+  </div>
+  <div class="group" id="dots">
+    <span class="lbl">Record</span>
+  </div>
+  <div class="group">
+    <span class="lbl">Speed</span>
+    <button id="rpm33" aria-pressed="true">33⅓</button>
+    <button id="rpm45" aria-pressed="false">45</button>
+  </div>
+  <div class="group">
+    <span class="lbl">Artwork</span>
+    <button id="modeFull" aria-pressed="true">Full face</button>
+    <button id="modeLabel" aria-pressed="false">Centre label</button>
+  </div>
+  <div class="group">
+    <button id="open">Take record out</button>
+    <button id="sound" aria-pressed="true">Sound on</button>
+    <button id="flip">Flip to side B</button>
+  </div>
+</div>
+
+<section class="credits" id="credits" aria-hidden="true" aria-label="Credits">
+  <h2>Credits</h2>
+  <button class="back" id="creditsBack">Back</button>
+  <div class="groups">
+    <p><span class="k">Sound recording and processing</span>VenueSIM<br>Jukka Surakka, Janne Riionheimo, Paul Sainio, Juha Ponteva, Tapio Lokki</p>
+    <p><span class="k">Exhibition booth &amp; visual design</span>Karen Charlot-Wauquier</p>
+  </div>
+  <p class="photo">Photography (retrieved from Unsplash.com)<br>Jessica Christian, Nathan Fertig, Ning Zhang, Tim Lankford</p>
+</section>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const ART_SRC="";
+const CREAM='#dccdb2', INK='#0d0d0e';
+const RECORDS=[
+  {name:'Blue', venue:'Arena', genre:'Rock', track:'rock', card:'assets/img/sleeve-print-blue.jpg', paper:'#2c3fa6', bg:'#04061a', stage:'#080b26', photo:'assets/img/record-blue.jpg'},              // guitarist halftone, vellum sleeve with the info card
+  {name:'Pink', venue:'Theatre', genre:'Pop', track:'pop', card:'assets/img/sleeve-print-pink.jpg', paper:'#cf3f86', bg:'#14040b', stage:'#200813', photo:'assets/img/record-pink.jpg'},              // crowd halftone, vellum sleeve with the info card
+  {name:'Orange', venue:'Arena', genre:'Soul', track:'soul', card:'assets/img/sleeve-print-orange.jpg', paper:'#d55a28', bg:'#150703', stage:'#221009', photo:'assets/img/record-orange.jpg'},  // singer halftone
+  {name:'Green', venue:'Theatre', genre:'Folk', track:'folk', card:'assets/img/sleeve-print-green.jpg', paper:'#14946b', bg:'#03120c', stage:'#071e15', photo:'assets/img/record-green.jpg'},    // violin halftone
+];
+
+const stage=document.getElementById('stage');
+// tablets and phones get lighter textures, fewer pixels and no shadows, so they stay smooth
+const LIGHT=matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>1;
+const renderer=new THREE.WebGLRenderer({antialias:!LIGHT,alpha:false,powerPreference:'high-performance'});   // a sharp tablet screen hides jagged edges anyway
+renderer.setPixelRatio(Math.min(devicePixelRatio,LIGHT?1.5:2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.LinearToneMapping;
+renderer.toneMappingExposure=0.88;
+renderer.shadowMap.enabled=!LIGHT;
+const bgNow=new THREE.Color('#080b26'), bgTo=new THREE.Color('#080b26');renderer.setClearColor(bgNow,1);   // the room colour, painted by the scene itself
+stage.prepend(renderer.domElement);
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(35,1,0.1,100);
+camera.position.set(0,8.6,-0.2);   // looking straight down at the platter
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.target.set(0,0,-0.22);   // sits the records a little lower, clear of the corner text
+controls.enableDamping=true;controls.minDistance=1.6;controls.maxDistance=30;controls.enablePan=false;
+controls.enableRotate=false;controls.enableZoom=false;   // fixed view: the scene can't be turned or zoomed
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x554a44,0.55));
+const key=new THREE.DirectionalLight(0xffffff,1.35);key.position.set(3,5,2);key.castShadow=true;
+key.shadow.mapSize.set(LIGHT?1024:2048,LIGHT?1024:2048);key.shadow.radius=6;
+Object.assign(key.shadow.camera,{left:-8,right:8,top:8,bottom:-8});scene.add(key);
+const rim=new THREE.PointLight(0xffe6c8,1.0,12);rim.position.set(-3,1.5,-2);scene.add(rim);
+
+const R=1.5, HOLE_R=0.036, S=LIGHT?1024:2048, cx=S/2, px=S/2/R;
+const art=new Image();
+RECORDS.forEach(r=>{if(r.card){const ci=new Image();ci.onload=()=>{discs&&discs.forEach(d=>{if(d.rec===r&&d.card){const m=d.card.material;m.map.dispose();m.map=texOf(cardCanvas(r));m.needsUpdate=true;}});};ci.src=r.card;r.cardImg=ci;}
+  if(r.photo){const im=new Image();im.onload=()=>buildSoon();im.src=r.photo;r.img=im;}});   // one print per record
+
+// Paper grain: speckle + faint laid-paper fibres, for an uncoated matte stock
+const grain=(()=>{const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');
+  const d=g.createImageData(512,512);
+  for(let i=0;i<d.data.length;i+=4){const v=128+(Math.random()-.5)*70;d.data[i]=d.data[i+1]=d.data[i+2]=v;d.data[i+3]=255;}
+  g.putImageData(d,0,0);
+  for(let y=0;y<512;y+=2){g.fillStyle=Math.random()<.5?'rgba(0,0,0,.05)':'rgba(255,255,255,.05)';g.fillRect(0,y,512,1);}
+  return c;})();
+
+// The illustration recoloured cream once; reused by every face
+let creamArt=null;
+function prepArt(){
+  const N=1600,c=document.createElement('canvas');c.width=c.height=N;const g=c.getContext('2d');
+  g.drawImage(art,0,0,N,N);g.globalCompositeOperation='source-in';g.fillStyle=CREAM;g.fillRect(0,0,N,N);
+  g.globalCompositeOperation='source-atop';g.globalAlpha=.10;g.fillStyle=g.createPattern(grain,'repeat');g.fillRect(0,0,N,N);
+  creamArt=c;
+}
+
+// One face. mode 'full' = paper artwork across the whole face; 'label' = black grooved vinyl with a paper label
+function makeFace(side,mode,paper,photo){
+  const c=document.createElement('canvas');c.width=c.height=S;const g=c.getContext('2d');
+  const r2=document.createElement('canvas');r2.width=r2.height=S;const rg=r2.getContext('2d');
+  const artR = mode==='full' ? R*0.985 : 0.52;
+
+  g.fillStyle=INK;g.beginPath();g.arc(cx,cx,R*px,0,7);g.fill();
+  rg.fillStyle='#4a4a4a';rg.fillRect(0,0,S,S);
+  if(mode==='label'){
+    const outer=R*px-14, inner=0.72*px, gaps=side==='A'?[.18,.37,.55,.79]:[.26,.5,.71];
+    for(let r=outer;r>inner;r-=1.6){const t=(outer-r)/(outer-inner);const gap=gaps.some(x=>Math.abs(t-x)<.008);
+      g.strokeStyle=gap?'#2b2b2e':(Math.random()<.5?'#161618':'#0a0a0b');g.lineWidth=gap?1.6:.9;g.beginPath();g.arc(cx,cx,r,0,7);g.stroke();}
+    rg.fillStyle='#3c3c3c';rg.beginPath();rg.arc(cx,cx,R*px,0,7);rg.fill();
+  }
+
+  const pr=artR*px;
+  g.save();g.beginPath();g.arc(cx,cx,pr,0,7);g.clip();
+  g.fillStyle=paper;g.fillRect(0,0,S,S);
+  g.globalCompositeOperation='multiply';g.globalAlpha=.3;
+  g.fillStyle=g.createPattern(grain,'repeat');g.fillRect(0,0,S,S);
+  g.globalCompositeOperation='source-over';g.globalAlpha=1;
+  if(photo&&photo.complete&&photo.naturalWidth){   // photograph printed edge to edge across the paper area
+    g.save();g.filter='brightness(.8)';g.drawImage(photo,cx-pr,cx-pr,pr*2,pr*2);g.restore();   // keeps the print's cream from blowing out under the lights
+  } else if(creamArt){
+    const size=pr*2*(mode==='full'?0.948:0.918);   // the drawing's circle sits concentric with the rim
+    g.save();g.translate(cx,cx);if(side==='B')g.scale(-1,1);
+    g.drawImage(creamArt,-size/2,-size/2,size,size);g.restore();
+  }
+  g.restore();
+  rg.fillStyle='#e0e0e0';rg.beginPath();rg.arc(cx,cx,pr,0,7);rg.fill();   // paper is matte
+
+  if(mode==='full'){
+    g.save();g.globalAlpha=.06;g.strokeStyle='#000';g.lineWidth=1;
+    for(let r=pr;r>0.36*px;r-=3){g.beginPath();g.arc(cx,cx,r,0,7);g.stroke();}
+    g.restore();
+    g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=6;g.beginPath();g.arc(cx,cx,pr,0,7);g.stroke();
+  }
+  // centre label: a crisp 4-inch disc in a lighter tint, the drawing carrying on underneath
+  if(mode==='full'){const LR=0.24*px;   // stops short of the mic, whose nearest edge is 0.29 from the centre
+    g.save();g.beginPath();g.arc(cx,cx,LR,0,7);g.clip();
+    g.globalCompositeOperation='screen';g.fillStyle='rgba(255,236,220,.30)';g.fillRect(cx-LR,cx-LR,LR*2,LR*2);g.restore();
+    g.save();g.strokeStyle='rgba(0,0,0,.18)';g.lineWidth=3;g.beginPath();g.arc(cx,cx,LR,0,7);g.stroke();
+    g.strokeStyle='rgba(255,255,255,.18)';g.lineWidth=2;g.beginPath();g.arc(cx,cx,LR-3,0,7);g.stroke();g.restore();}
+  g.globalCompositeOperation='destination-out';g.beginPath();g.arc(cx,cx,HOLE_R*px,0,7);g.fill();
+
+  const tex=new THREE.CanvasTexture(c);tex.encoding=THREE.sRGBEncoding;tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  return {tex,rough:new THREE.CanvasTexture(r2)};
+}
+
+// Three records in a row; the carousel slides them along x
+const SPACING=5.6, DIAG_X=9.5, DIAG_Z=7.8;   // long enough that a record is fully off screen before it is hidden
+const rimGeo=new THREE.CylinderGeometry(R,R,0.018,160,1,true), faceGeo=new THREE.CircleGeometry(R,160);
+const PEEK=1.59, SLEEVE=3.18, SH=SLEEVE/2, BOARD=0.026;
+// Sleeve body: a board with softly rounded corners and bevelled edges, like folded card
+const sleeveGeo=(()=>{
+  const r=0.035, sh=new THREE.Shape();
+  sh.moveTo(-SH+r,-SH);sh.lineTo(SH-r,-SH);sh.quadraticCurveTo(SH,-SH,SH,-SH+r);sh.lineTo(SH,SH-r);sh.quadraticCurveTo(SH,SH,SH-r,SH);
+  sh.lineTo(-SH+r,SH);sh.quadraticCurveTo(-SH,SH,-SH,SH-r);sh.lineTo(-SH,-SH+r);sh.quadraticCurveTo(-SH,-SH,-SH+r,-SH);
+  const g=new THREE.ExtrudeGeometry(sh,{depth:BOARD,bevelEnabled:true,bevelThickness:0.007,bevelSize:0.007,bevelSegments:3,curveSegments:5});
+  g.translate(0,0,-BOARD/2);
+  const pos=g.attributes.position, uv=g.attributes.uv;
+  for(let i=0;i<pos.count;i++)uv.setXY(i,(pos.getX(i)+SH)/SLEEVE,(pos.getY(i)+SH)/SLEEVE);
+  return g;})();
+const backGeo=new THREE.PlaneGeometry(SLEEVE-0.02,SLEEVE-0.02);
+function paperCanvas(color,size){const c=document.createElement('canvas');c.width=c.height=size;const g=c.getContext('2d');
+  g.fillStyle=color;g.fillRect(0,0,size,size);g.globalCompositeOperation='multiply';g.globalAlpha=.3;
+  g.fillStyle=g.createPattern(grain,'repeat');g.fillRect(0,0,size,size);g.globalCompositeOperation='source-over';g.globalAlpha=1;return [c,g];}
+let wakeFrames=60;function kick(n=30){wakeFrames=Math.max(wakeFrames,n);}   // a few frames of drawing after anything changes
+function texOf(c,srgb=true){kick();const t=new THREE.CanvasTexture(c);if(srgb)t.encoding=THREE.sRGBEncoding;t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;}
+// Shelf wear: a pale ring where the record has pressed through, scuffed edges, rubbed corners
+function wear(g,Z,light){
+  const ringR=Z*(R/SLEEVE);
+  g.save();g.filter=`blur(${Z*0.006}px)`;g.lineCap='round';
+  for(let a=0;a<Math.PI*2;a+=0.05){const k=Math.random();     // patchy, the way real ring wear rubs through unevenly
+    g.strokeStyle=`rgba(255,250,240,${(light?.03:.06)+k*k*(light?.13:.2)})`;g.lineWidth=Z*(0.008+Math.random()*0.012);
+    g.beginPath();g.arc(Z/2,Z/2,ringR*(0.995+Math.random()*0.01),a,a+0.06);g.stroke();}
+  g.restore();
+  for(let i=0;i<520;i++){const side=i%4,t=Math.random()*Z,d=Math.pow(Math.random(),3)*Z*0.02,len=2+Math.random()*Z*0.012;
+    const x=side===0?t:side===1?Z-d:side===2?t:d, y=side===0?d:side===1?t:side===2?Z-d:t;
+    g.strokeStyle=`rgba(255,250,238,${.12+Math.random()*.25})`;g.lineWidth=1+Math.random()*1.5;g.beginPath();g.moveTo(x,y);
+    side%2?g.lineTo(x,y+len):g.lineTo(x+len,y);g.stroke();}
+  [[0,0],[Z,0],[0,Z],[Z,Z]].forEach(([x,y])=>{const gr=g.createRadialGradient(x,y,0,x,y,Z*0.05);
+    gr.addColorStop(0,'rgba(255,250,238,.35)');gr.addColorStop(1,'rgba(255,250,238,0)');g.fillStyle=gr;g.fillRect(x-Z*.05,y-Z*.05,Z*.1,Z*.1);});
+  const v=g.createRadialGradient(Z/2,Z/2,Z*0.45,Z/2,Z/2,Z*0.75);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(60,40,20,.10)');
+  g.fillStyle=v;g.fillRect(0,0,Z,Z);
+}
+// Plain uncoated paper: flat ink, soft fibres, no visible grain
+const fibres=(()=>{const Z=512,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  g.fillStyle='#808080';g.fillRect(0,0,Z,Z);g.filter='blur(1.5px)';
+  for(let i=0;i<900;i++){const v=Math.random()<.5?150:105;g.strokeStyle=`rgba(${v},${v},${v},.35)`;g.lineWidth=.6;
+    const x=Math.random()*Z,y=Math.random()*Z,a=Math.random()*Math.PI,l=4+Math.random()*14;
+    g.beginPath();g.moveTo(x,y);g.quadraticCurveTo(x+Math.cos(a)*l/2+2,y+Math.sin(a)*l/2,x+Math.cos(a)*l,y+Math.sin(a)*l);g.stroke();}
+  return c;})();
+function paperSheet(g,Z,base){
+  g.fillStyle=base;g.fillRect(0,0,Z,Z);
+  g.save();g.globalCompositeOperation='soft-light';g.globalAlpha=.35;g.fillStyle=g.createPattern(fibres,'repeat');g.fillRect(0,0,Z,Z);g.restore();
+  const v=g.createRadialGradient(Z/2,Z/2,Z*.4,Z/2,Z/2,Z*.75);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.07)');
+  g.fillStyle=v;g.fillRect(0,0,Z,Z);
+}
+function coverCanvas(rec){
+  const Z=1024,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  paperSheet(g,Z,rec.paper);
+  if(art.complete&&art.naturalWidth){
+    const k=document.createElement('canvas');k.width=k.height=Z;const kg=k.getContext('2d');
+    const sz=Z*0.8;kg.drawImage(art,(Z-sz)/2,(Z-sz)/2,sz,sz);
+    kg.globalCompositeOperation='source-in';kg.fillStyle=CREAM;kg.fillRect(0,0,Z,Z);
+    kg.globalCompositeOperation='soft-light';kg.globalAlpha=.3;kg.fillStyle=kg.createPattern(fibres,'repeat');kg.fillRect(0,0,Z,Z);
+    kg.globalCompositeOperation='destination-in';kg.globalAlpha=1;kg.drawImage(art,(Z-sz)/2,(Z-sz)/2,sz,sz);
+    g.drawImage(k,0,0);
+  }
+  return c;
+}
+// Relief: the record's outline pressed up through the card, plus paper tooth
+const bumpTex=(()=>{const Z=512,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  g.fillStyle='#7a7a7a';g.fillRect(0,0,Z,Z);
+  const r=Z*(R/SLEEVE);g.fillStyle='#868686';g.beginPath();g.arc(Z/2,Z/2,r,0,7);g.fill();
+  g.filter='blur(4px)';g.strokeStyle='#a4a4a4';g.lineWidth=7;g.beginPath();g.arc(Z/2,Z/2,r,0,7);g.stroke();g.filter='none';
+  g.globalAlpha=.25;g.drawImage(grain,0,0,Z,Z);return texOf(c,false);})();
+// ---- Clear plastic outer sleeve ----
+// Reflections come from a tiny studio of soft boxes, used only by the plastic
+const plasticEnv=(()=>{const es=new THREE.Scene();
+  es.add(new THREE.Mesh(new THREE.BoxGeometry(20,20,20),new THREE.MeshBasicMaterial({color:0x101014,side:THREE.BackSide})));
+  [[0,8,0,6,6],[-7,3,4,3,8],[7,4,-3,2,6]].forEach(([x,y,z,w,h])=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+    new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));m.position.set(x,y,z);m.lookAt(0,0,0);es.add(m);});
+  const pm=new THREE.PMREMGenerator(renderer);return pm.fromScene(es,0.04).texture;})();
+// Film texture: almost clear, milkier welded seams along three edges, faint scuffs and streaks
+const filmTex=(()=>{const Z=1024,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  g.fillStyle='rgba(255,255,255,0.06)';g.fillRect(0,0,Z,Z);
+  [[0.18,0.10],[0.42,0.05],[0.70,0.08]].forEach(([t,a])=>{                 // soft diagonal gloss bands
+    const gr=g.createLinearGradient(0,0,Z,Z);gr.addColorStop(Math.max(0,t-.06),'rgba(255,255,255,0)');
+    gr.addColorStop(t,`rgba(255,255,255,${a})`);gr.addColorStop(Math.min(1,t+.06),'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,Z,Z);});
+  const seam=Z*0.012;g.fillStyle='rgba(255,255,255,0.30)';
+  g.fillRect(0,0,Z,seam);g.fillRect(0,Z-seam,Z,seam);g.fillRect(0,0,seam,Z);       // open along the right edge
+  g.fillStyle='rgba(255,255,255,0.14)';g.fillRect(seam,seam,Z*0.004,Z-2*seam);g.fillRect(seam,seam,Z-seam,Z*0.004);g.fillRect(seam,Z-seam-Z*0.004,Z-seam,Z*0.004);
+  for(let i=0;i<160;i++){const x=Math.random()*Z,y=Math.random()*Z,a=Math.random()*Math.PI,l=Z*(0.02+Math.random()*0.18);
+    g.strokeStyle=`rgba(255,255,255,${0.02+Math.random()*0.07})`;g.lineWidth=0.6+Math.random()*1.4;
+    g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);g.stroke();}
+  return texOf(c);})();
+// Gentle crinkles in the film
+const crinkleTex=(()=>{const Z=512,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  g.fillStyle='#808080';g.fillRect(0,0,Z,Z);g.filter='blur(14px)';
+  for(let i=0;i<70;i++){const v=100+Math.random()*60|0;g.fillStyle=`rgb(${v},${v},${v})`;g.beginPath();
+    g.ellipse(Math.random()*Z,Math.random()*Z,20+Math.random()*90,8+Math.random()*30,Math.random()*Math.PI,0,7);g.fill();}
+  g.filter='blur(2px)';
+  for(let i=0;i<14;i++){const v=Math.random()<.5?150:105;g.strokeStyle=`rgb(${v},${v},${v})`;g.lineWidth=1+Math.random()*2;
+    const x=Math.random()*Z,y=Math.random()*Z,a=Math.random()*Math.PI,l=40+Math.random()*160;g.beginPath();g.moveTo(x,y);
+    g.quadraticCurveTo(x+Math.cos(a)*l*.5+Math.random()*20,y+Math.sin(a)*l*.5+Math.random()*20,x+Math.cos(a)*l,y+Math.sin(a)*l);g.stroke();}
+  return texOf(c,false);})();
+// ---- Printed card sleeve with a sprayed, airbrushed print ----
+function shade(hex,amt){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;
+  const t=amt<0?0:255,k=Math.abs(amt);r=Math.round(r+(t-r)*k);g=Math.round(g+(t-g)*k);b=Math.round(b+(t-b)*k);return `rgb(${r},${g},${b})`;}
+function sprayGround(g,Z,base){
+  g.fillStyle=base;g.fillRect(0,0,Z,Z);
+  g.save();g.filter=`blur(${Z*0.05}px)`;                       // cloudy airbrush mottling
+  for(let i=0;i<70;i++){g.fillStyle=Math.random()<.5?shade(base,.2):shade(base,-.16);g.globalAlpha=.16+Math.random()*.26;
+    g.beginPath();g.ellipse(Math.random()*Z,Math.random()*Z,Z*(.04+Math.random()*.14),Z*(.03+Math.random()*.1),Math.random()*3,0,7);g.fill();}
+  g.restore();
+  const v=g.createRadialGradient(Z/2,Z/2,Z*.3,Z/2,Z/2,Z*.75);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.14)');
+  g.fillStyle=v;g.fillRect(0,0,Z,Z);
+}
+function sprayNoise(g,Z,amt){const d=g.getImageData(0,0,Z,Z),a=d.data;
+  for(let i=0;i<a.length;i+=4){const n=(Math.random()-.5)*amt;a[i]+=n;a[i+1]+=n;a[i+2]+=n;}g.putImageData(d,0,0);}
+// Muted sleeve stock: the record's colour knocked back toward warm grey
+function muted(hex){const c=new THREE.Color(hex),g=new THREE.Color('#b8ab96');c.lerp(g,.36);c.multiplyScalar(.84);return '#'+c.getHexString();}
+// Paper relief: fibres, soft handling crinkles and a couple of light creases
+const paperBump=(()=>{const Z=1024,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  g.fillStyle='#808080';g.fillRect(0,0,Z,Z);
+  g.filter='blur(30px)';for(let i=0;i<60;i++){const v=110+Math.random()*40|0;g.fillStyle=`rgb(${v},${v},${v})`;g.beginPath();
+    g.ellipse(Math.random()*Z,Math.random()*Z,40+Math.random()*160,20+Math.random()*60,Math.random()*3,0,7);g.fill();}
+  g.filter='blur(1.5px)';
+  for(let i=0;i<5;i++){const x=Math.random()*Z,y=Math.random()*Z,a=Math.random()*Math.PI,l=120+Math.random()*380;
+    g.strokeStyle='rgba(175,175,175,.7)';g.lineWidth=2;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);g.stroke();
+    g.strokeStyle='rgba(95,95,95,.6)';g.lineWidth=2;g.beginPath();g.moveTo(x+2,y+2);g.lineTo(x+2+Math.cos(a)*l,y+2+Math.sin(a)*l);g.stroke();}
+  g.filter='none';g.globalAlpha=.5;g.fillStyle=g.createPattern(fibres,'repeat');g.fillRect(0,0,Z,Z);
+  return texOf(c,false);})();
+// One sheet of the pocket: puffed where the record sits, pinched shut along the closed edges, gently wavy
+function sheetGeo(sign,seed){
+  const N=110,geo=new THREE.PlaneGeometry(SLEEVE,SLEEVE,N,N),pos=geo.attributes.position;
+  const rnd=k=>Math.sin(seed*12.9898+k*78.233)*43758.5453%1;
+  const w=[0,1,2,3].map(k=>[1.2+rnd(k)*2.2,1.0+rnd(k+9)*2.4,rnd(k+3)*6.28]);
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i),y=pos.getY(i);
+    const dEdge=Math.min(x+SH,SH-y,y+SH);                         // left, top and bottom are glued; the right edge is open
+    const shut=THREE.MathUtils.smoothstep(dEdge,0,0.07);
+    const r=Math.hypot(x-PEEK,y), dome=THREE.MathUtils.smoothstep(1.75-r,0,0.8);
+    let wave=0;w.forEach(([fx,fy,ph])=>{wave+=Math.sin(x*fx+ph)*Math.cos(y*fy+ph*.7);});
+    const h=0.0105*shut + 0.003*dome*shut + 0.0012*(wave/4+.5)*shut;
+    pos.setZ(i,sign*Math.max(0.0006,h));
+  }
+  geo.computeVertexNormals();return geo;
+}
+// Bake the handling marks into the print too, so creases read even under flat top light
+function handled(c){const g=c.getContext('2d');g.save();g.globalCompositeOperation='overlay';g.globalAlpha=.45;
+  g.drawImage(paperBump.image,0,0,c.width,c.height);g.restore();return c;}
+// Frosted, semi-transparent sleeve (like matte polypropylene) with the illustration printed in the record's muted colour
+const FROST='#e4e7e6';
+// Smooth vellum: an even, milky translucency with only a very fine, quiet tooth
+function frostCanvas(rec,withArt){
+  const Z=1024,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  {const t=new THREE.Color(rec.paper).lerp(new THREE.Color('#f2f1ee'),.85);   // the record's colour, a little lighter
+    g.fillStyle=`rgba(${t.r*255|0},${t.g*255|0},${t.b*255|0},0.8)`;}g.fillRect(0,0,Z,Z);
+  const d=g.getImageData(0,0,Z,Z),a=d.data;
+  for(let i=0;i<a.length;i+=4){const n=(Math.random()-.5)*7;a[i]+=n;a[i+1]+=n;a[i+2]+=n;a[i+3]+=(Math.random()-.5)*6;}
+  g.putImageData(d,0,0);
+  g.save();g.filter=`blur(${Z*0.08}px)`;                                       // barely-there unevenness in the sheet
+  for(let i=0;i<14;i++){g.fillStyle=`rgba(245,245,242,${.02+Math.random()*.03})`;g.beginPath();g.arc(Math.random()*Z,Math.random()*Z,Z*(.1+Math.random()*.2),0,7);g.fill();}
+  g.restore();
+  const seam=Z*0.008;g.fillStyle='rgba(248,248,245,.18)';                       // sealed edges, just slightly denser
+  g.fillRect(0,0,Z,seam);g.fillRect(0,Z-seam,Z,seam);g.fillRect(0,0,seam,Z);
+  return c;
+}
+
+
+// Info card: white stock, light mono type, two hairline rules
+const CARD_H=2.6, CARD_W=CARD_H*541/1464;   // keeps the print's own proportions
+// Sleeve label: the VenueSIM / Slush 2026 print, in the record's own ink
+function cardCanvas(rec){
+  const W=541,H=1464,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#f5f5f2';g.fillRect(0,0,W,H);
+  const im=rec&&rec.cardImg;if(im&&im.complete&&im.naturalWidth)g.drawImage(im,0,0,W,H);
+  return c;
+}
+const coverImg=new Image();
+function coverPrint(){const Z=1600,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  g.fillStyle='#e0909f';g.fillRect(0,0,Z,Z);
+  if(coverImg.complete&&coverImg.naturalWidth){g.filter='brightness(.9)';g.drawImage(coverImg,0,0,Z,Z);g.filter='none';}
+  return c;}
+function coverBack(){const Z=512,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');paperSheet(g,Z,'#c9798a');return c;}
+function makeSleeve(rec){
+  const mat=(map,side,op)=>new THREE.MeshStandardMaterial({map,side,transparent:true,opacity:op,depthWrite:false,
+    roughness:.85,metalness:0,envMap:plasticEnv,envMapIntensity:.15});
+  // a printed sleeve is opaque card; the others stay frosted vellum
+  const cardMat=(map,side)=>new THREE.MeshStandardMaterial({map,side,roughness:.9,metalness:0,bumpMap:paperBump,bumpScale:0.006});
+  const front=rec.cover?cardMat(texOf(coverPrint()),THREE.FrontSide):mat(texOf(frostCanvas(rec,false)),THREE.FrontSide,1);
+  const backM=rec.cover?cardMat(texOf(coverBack()),THREE.BackSide):mat(texOf(frostCanvas(rec,false)),THREE.BackSide,1);
+  const group=new THREE.Group();
+  const body=new THREE.Mesh(sheetGeo(1,rec.name.length),front);body.rotation.x=-Math.PI/2;body.renderOrder=3;group.add(body);
+  const back=new THREE.Mesh(sheetGeo(-1,rec.name.length+5),backM);back.rotation.x=-Math.PI/2;back.renderOrder=1;group.add(back);
+  // a soft, light shadow only: frosted film lets most light through
+  const shadow=new THREE.Mesh(new THREE.PlaneGeometry(SLEEVE,SLEEVE),new THREE.ShadowMaterial({opacity:0}));shadow.visible=false;
+  // info card fixed to the left side of the sleeve
+  if(rec.cover){scene.add(group);return {group,body,front,card:null};}   // the print carries its own venue details
+  const card=new THREE.Mesh(new THREE.PlaneGeometry(CARD_W,CARD_H),new THREE.MeshBasicMaterial({map:texOf(cardCanvas(rec)),toneMapped:false}));   // shown in the print's exact colours
+  card.rotation.x=-Math.PI/2;card.position.set(-SH+0.14+CARD_W/2,0.0165,0);card.renderOrder=4;group.add(card);
+  scene.add(group);return {group,body,front,card};
+}
+
+
+function refreshCovers(){discs.forEach(d=>{const m=d.front;m.map.dispose();m.map=texOf(d.rec.cover?coverPrint():frostCanvas(d.rec,false));m.needsUpdate=true;});}
+// Light caught in the grooves: two soft opposing wedges that stay put while the record turns
+const sheenTex=(()=>{const Z=1024,c=document.createElement('canvas');c.width=c.height=Z;const g=c.getContext('2d');
+  [[-0.75,1],[Math.PI-0.75,.75]].forEach(([a,k])=>{for(let i=0;i<40;i++){const w=0.42*(1-i/40),al=0.035*k;
+    g.fillStyle=`rgba(255,235,245,${al})`;g.beginPath();g.moveTo(Z/2,Z/2);g.arc(Z/2,Z/2,Z/2,a-w,a+w);g.closePath();g.fill();}});
+  const t=new THREE.CanvasTexture(c);return t;})();
+const discs=RECORDS.map(rec=>{
+  const disc=new THREE.Group();scene.add(disc);
+  const spin=new THREE.Group();disc.add(spin);
+  const rimM=new THREE.Mesh(rimGeo,new THREE.MeshStandardMaterial({color:0x0c0c0d,roughness:.35}));rimM.castShadow=true;spin.add(rimM);
+  const top=new THREE.Mesh(faceGeo);top.rotation.x=-Math.PI/2;top.position.y=0.0091;top.castShadow=true;spin.add(top);
+  const bot=new THREE.Mesh(faceGeo);bot.rotation.x=Math.PI/2;bot.position.y=-0.0091;spin.add(bot);
+  // the sleeve: cream board printed with the illustration in the record's colour, open along its right edge
+  const {group:sleeve,body,front,card}=makeSleeve(rec);
+  if(rec.vinyl){const sh=new THREE.Mesh(new THREE.RingGeometry(0.53,R*0.985,128,1),new THREE.MeshBasicMaterial({map:sheenTex,transparent:true,
+    blending:THREE.AdditiveBlending,depthWrite:false,opacity:.14}));sh.rotation.x=-Math.PI/2;sh.position.y=0.0125;sh.renderOrder=2;disc.add(sh);}
+  return {rec,disc,spin,rimM,top,bot,sleeve,body,front,card,p:0};
+});
+
+let mode='full';
+// ---- Realistic coloured vinyl with a printed paper centre label ----
+const labelImg=new Image();
+function makePinkVinyl(side,base){
+  const c=document.createElement('canvas');c.width=c.height=S;const g=c.getContext('2d');
+  const half=()=>{const k=document.createElement('canvas');k.width=k.height=S/2;const x=k.getContext('2d');x.scale(.5,.5);return [k,x];};  // light-weight helper maps
+  const [bm,bg]=half(), [cc,cg]=half(), [rr,rg]=half();   // groove relief, where the gloss is, roughness
+  const Rpx=R*px, LABEL=0.5*px, LEADIN=Rpx-0.035*px, RUNOUT=0.62*px;
+  const col=new THREE.Color(base), hex=k=>{const t=col.clone().multiplyScalar(k);return `rgb(${Math.min(255,t.r*255)|0},${Math.min(255,t.g*255)|0},${Math.min(255,t.b*255)|0})`;};
+  // body of the disc, slightly deeper toward the rim like a thick coloured pressing
+  const body=g.createRadialGradient(cx,cx,LABEL,cx,cx,Rpx);body.addColorStop(0,hex(1.0));body.addColorStop(1,hex(.78));
+  g.fillStyle=body;g.beginPath();g.arc(cx,cx,Rpx,0,7);g.fill();
+  bg.fillStyle='#808080';bg.fillRect(0,0,S,S);
+  cg.fillStyle='#fff';cg.fillRect(0,0,S,S);
+  rg.fillStyle='#5a5a5a';rg.fillRect(0,0,S,S);
+  // grooves between the lead-in and the run-out, with the quiet gaps between tracks
+  const gaps=side==='A'?[.2,.41,.63,.82]:[.24,.49,.74];
+  for(let r=LEADIN;r>RUNOUT;r-=1.25){const t=(LEADIN-r)/(LEADIN-RUNOUT), gap=gaps.some(x=>Math.abs(t-x)<.006);
+    const k=gap?1.03:(.86+Math.random()*.16);
+    g.strokeStyle=hex(k);g.globalAlpha=gap?.6:.7;g.lineWidth=gap?1.4:.8;g.beginPath();g.arc(cx,cx,r,0,7);g.stroke();
+    const v=gap?128:(Math.random()<.5?150:100);bg.strokeStyle=`rgb(${v},${v},${v})`;bg.lineWidth=.8;bg.beginPath();bg.arc(cx,cx,r,0,7);bg.stroke();
+    rg.strokeStyle=gap?'#3a3a3a':'#666';rg.lineWidth=.8;rg.beginPath();rg.arc(cx,cx,r,0,7);rg.stroke();}
+  g.globalAlpha=1;
+  // run-out spiral and a small hand-etched matrix number
+  g.strokeStyle=hex(.9);g.lineWidth=1.2;g.globalAlpha=.6;g.beginPath();
+  for(let a=0;a<Math.PI*6;a+=.02){const r=RUNOUT-6-a*3.2;g.lineTo(cx+Math.cos(a)*r,cx+Math.sin(a)*r);}g.stroke();g.globalAlpha=1;
+  g.save();g.translate(cx,cx);g.rotate(side==='A'?.9:2.6);g.fillStyle=hex(.78);g.globalAlpha=.7;
+  g.font='italic 20px "IBM Plex Mono", monospace';g.textAlign='center';g.fillText(`VSIM-001-${side}`,0,-(RUNOUT-RUNOUT*0.12));g.restore();g.globalAlpha=1;
+  // rim bead
+  g.strokeStyle=hex(.7);g.lineWidth=5;g.beginPath();g.arc(cx,cx,Rpx-2.5,0,7);g.stroke();
+  // paper label with the photograph, a pressed ring around it
+  g.save();g.beginPath();g.arc(cx,cx,LABEL,0,7);g.clip();
+  g.fillStyle='#d9a0aa';g.fillRect(cx-LABEL,cx-LABEL,LABEL*2,LABEL*2);
+  if(labelImg.complete&&labelImg.naturalWidth){g.save();g.translate(cx,cx);if(side==='B')g.scale(-1,1);
+    g.filter='brightness(.88)';g.drawImage(labelImg,-LABEL,-LABEL,LABEL*2,LABEL*2);g.restore();}
+  g.globalCompositeOperation='multiply';g.globalAlpha=.12;g.fillStyle=g.createPattern(fibres,'repeat');g.fillRect(cx-LABEL,cx-LABEL,LABEL*2,LABEL*2);
+  g.restore();
+  g.strokeStyle='rgba(0,0,0,.25)';g.lineWidth=3;g.beginPath();g.arc(cx,cx,LABEL,0,7);g.stroke();
+  g.strokeStyle=hex(1.1);g.lineWidth=2;g.globalAlpha=.7;g.beginPath();g.arc(cx,cx,LABEL+0.03*px,0,7);g.stroke();g.globalAlpha=1;
+  bg.fillStyle='#808080';bg.beginPath();bg.arc(cx,cx,RUNOUT,0,7);bg.fill();
+  bg.strokeStyle='#b0b0b0';bg.lineWidth=6;bg.beginPath();bg.arc(cx,cx,LABEL+0.03*px,0,7);bg.stroke();
+  cg.fillStyle='#000';cg.beginPath();cg.arc(cx,cx,LABEL,0,7);cg.fill();          // the label is matte paper
+  rg.fillStyle='#2e2e2e';rg.beginPath();rg.arc(cx,cx,RUNOUT,0,7);rg.fill();       // smooth, shiny run-out
+  rg.fillStyle='#ececec';rg.beginPath();rg.arc(cx,cx,LABEL,0,7);rg.fill();
+  g.globalCompositeOperation='destination-out';g.beginPath();g.arc(cx,cx,HOLE_R*px,0,7);g.fill();
+  const tex=new THREE.CanvasTexture(c);tex.encoding=THREE.sRGBEncoding;tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  return new THREE.MeshPhysicalMaterial({map:tex,roughnessMap:new THREE.CanvasTexture(rr),roughness:.7,metalness:0,
+    bumpMap:new THREE.CanvasTexture(bm),bumpScale:0.0025,clearcoat:1,clearcoatMap:new THREE.CanvasTexture(cc),clearcoatRoughness:.12,
+    envMap:plasticEnv,envMapIntensity:.28,alphaTest:.5});
+}
+function faceMat(side,paper,photo){
+  const {tex,rough}=makeFace(side,mode,paper,photo);
+  return new THREE.MeshStandardMaterial({map:tex,roughnessMap:rough,roughness:1,metalness:0,alphaTest:.5});
+}
+// several pictures finish loading around the same time: rebuild once, not once per picture
+let buildQueued=false;function buildSoon(){if(buildQueued)return;buildQueued=true;setTimeout(()=>{buildQueued=false;build();},60);}
+function build(){kick();
+  // records that share the same print share one pair of faces, so extra copies cost no extra memory
+  const old=new Set();discs.forEach(d=>[d.top,d.bot].forEach(m=>{if(m.material&&m.material.map)old.add(m.material);}));
+  old.forEach(M=>{['map','roughnessMap','bumpMap','clearcoatMap'].forEach(k=>{const t=M[k];if(t){t.dispose();if(t.image&&t.image.width)t.image.width=t.image.height=0;}});M.dispose();});
+  const made={};
+  discs.forEach(d=>{
+    const key=d.rec.photo||d.rec.name;
+    if(made[key]&&!d.rec.vinyl){d.top.material=made[key][0];d.bot.material=made[key][1];return;}
+    if(d.rec.vinyl){d.top.material=makePinkVinyl('A',d.rec.vinyl);d.bot.material=makePinkVinyl('B',d.rec.vinyl);d.rimM.material.color.set(new THREE.Color(d.rec.vinyl).multiplyScalar(.82));d.rimM.material.envMap=plasticEnv;return;}
+    d.top.material=faceMat('A',d.rec.paper,d.rec.img);d.bot.material=faceMat('B',d.rec.paper,d.rec.img);made[key]=[d.top.material,d.bot.material];
+  });
+  prewarm();
+}
+function prewarm(){
+  const seen=new Set();
+  scene.traverse(o=>{const ms=o.material?(Array.isArray(o.material)?o.material:[o.material]):[];
+    ms.forEach(m=>['map','roughnessMap','bumpMap','envMap'].forEach(k=>{const t=m[k];if(t&&!seen.has(t)&&renderer.initTexture){seen.add(t);try{renderer.initTexture(t);}catch(e){}}}));});
+  const hidden=[];scene.traverse(o=>{if(!o.visible){hidden.push(o);o.visible=true;}});
+  try{renderer.compile(scene,camera);}catch(e){}
+  hidden.forEach(o=>o.visible=false);
+}
+art.onload=()=>{prepArt();buildSoon();refreshCovers();};
+(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(()=>discs.forEach(d=>{   // redraw cards once the mono face has loaded
+  if(!d.card)return;                       // printed sleeves have no info card to redraw
+  const m=d.card.material;m.map.dispose();m.map=texOf(cardCanvas(d.rec));m.needsUpdate=true;}));
+build();   // the record prints carry their own artwork, so the old illustration isn't loaded
+
+
+
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(40,20),new THREE.ShadowMaterial({opacity:.4}));
+ground.rotation.x=-Math.PI/2;ground.position.y=-0.35;ground.receiveShadow=true;scene.add(ground);
+
+// ---- Switching records ----
+let current=0, carousel=0;
+const root=document.documentElement.style;
+const edName=document.getElementById('edName'), edNum=document.getElementById('edNum');
+const dotsWrap=document.getElementById('dots');
+const dots=RECORDS.map((r,i)=>{const b=document.createElement('button');b.className='dot';b.style.setProperty('--c',r.paper);
+  b.setAttribute('aria-label',`${r.name} record`);b.onclick=()=>go(i);dotsWrap.appendChild(b);return b;});
+let opened=false;
+const openBtn=document.getElementById('open'), hint=document.getElementById('hint');
+function setOpened(v){opened=v;if(v){setProcessed(.1);document.getElementById('cue').classList.remove('done');}   // every record starts at 10% processed
+  stage.classList.toggle('listening',v);if(v&&soundOn)audio.wake();openBtn.textContent=v?'Put back in sleeve':'Take record out';
+  hint.textContent=v?'Click the record to put it back':'Click the record to listen';}
+function go(i){
+  setOpened(false);
+  current=(i+RECORDS.length)%RECORDS.length;
+  const r=RECORDS[current];
+  root.setProperty('--bg',r.bg);root.setProperty('--stage',r.stage);root.setProperty('--accent',r.paper);
+  bgTo.set(r.stage);kick();
+  edName.textContent=r.name;
+  slot(document.getElementById('venue'),r.venue);slot(document.getElementById('genre'),r.genre);
+  dots.forEach((d,k)=>d.setAttribute('aria-pressed',k===current));
+}
+['pointerdown','keydown'].forEach(t=>addEventListener(t,()=>kick(),{passive:true}));
+document.getElementById('prev').onclick=()=>go(current-1);
+document.getElementById('next').onclick=()=>go(current+1);
+const creditsEl=document.getElementById('credits');
+function showCredits(v){creditsEl.classList.toggle('open',v);creditsEl.setAttribute('aria-hidden',!v);
+  (v?document.getElementById('creditsBack'):document.getElementById('creditsLink')).focus({preventScroll:true});}
+document.getElementById('creditsLink').onclick=()=>showCredits(true);
+document.getElementById('creditsBack').onclick=()=>showCredits(false);
+addEventListener('keydown',e=>{
+  if(creditsEl.classList.contains('open')){if(e.key==='Escape')showCredits(false);return;}   // the record controls rest while credits are open
+  if(e.key==='ArrowLeft')go(current-1);if(e.key==='ArrowRight')go(current+1);});
+openBtn.onclick=()=>setOpened(!opened);
+// Click (not drag) on the sleeve takes the record out; click on the record puts it back
+const ray=new THREE.Raycaster(), ptr=new THREE.Vector2(); let downAt=null;
+function hitTest(e){const r=renderer.domElement.getBoundingClientRect();ptr.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  ray.setFromCamera(ptr,camera);const d=discs[current];
+  const hits=ray.intersectObjects([d.body,d.card,d.top,d.bot].filter(Boolean),false);return hits.length?hits[0].object:null;}
+renderer.domElement.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY];swipeAt=[e.clientX,e.clientY,performance.now()];});
+// swipe left or right (finger or mouse) to move to the next or previous record
+let swipeAt=null;
+renderer.domElement.addEventListener('pointerup',e=>{if(!swipeAt)return;const dx=e.clientX-swipeAt[0],dy=e.clientY-swipeAt[1],ms=performance.now()-swipeAt[2];swipeAt=null;
+  if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.3)go(current+(dx<0?1:-1));});
+renderer.domElement.addEventListener('pointercancel',()=>{swipeAt=null;});
+renderer.domElement.addEventListener('pointerup',e=>{if(!downAt)return;const moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);downAt=null;
+  if(moved>6)return;const d=discs[current],h=hitTest(e);if(!h)return;
+  if(!opened&&d.p<0.05)setOpened(true); else if(opened&&d.p>0.95&&h!==d.body&&h!==d.card)setOpened(false);});
+renderer.domElement.addEventListener('pointermove',e=>{const d=discs[current],h=hitTest(e);
+  renderer.domElement.style.cursor=h&&((!opened&&d.p<0.05)||(opened&&d.p>0.95&&h!==d.body))?'pointer':'';});
+go(0);
+
+// ---- Controls ----
+let playing=true, rpm=100/3, flipTarget=0, flip=0;
+const playBtn=document.getElementById('play');
+playBtn.onclick=()=>{playing=!playing;playBtn.setAttribute('aria-pressed',playing);playBtn.textContent=playing?'■ Stop':'▶ Play';};
+const pair=(a,b,fa,fb)=>{a.onclick=()=>{fa();a.setAttribute('aria-pressed',true);b.setAttribute('aria-pressed',false);};
+  b.onclick=()=>{fb();b.setAttribute('aria-pressed',true);a.setAttribute('aria-pressed',false);};};
+pair(document.getElementById('rpm33'),document.getElementById('rpm45'),()=>rpm=100/3,()=>rpm=45);
+pair(document.getElementById('modeFull'),document.getElementById('modeLabel'),()=>{mode='full';build();},()=>{mode='label';build();});
+const flipBtn=document.getElementById('flip');
+flipBtn.onclick=()=>{flipTarget=flipTarget?0:Math.PI;flipBtn.textContent=flipTarget?'Flip to side A':'Flip to side B';};
+
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let speed=0,last=performance.now();
+const BASE=camera.position.clone().sub(controls.target).length();
+function resize(){kick();const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;   // frame not laid out yet
+  renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+  const len=BASE*Math.max(1,1.15/camera.aspect);
+  // pull back along the line of sight, so the view never flips past the point it looks at
+  const off=camera.position.clone().sub(controls.target);
+  if(isFinite(len)&&off.lengthSq()>0)camera.position.copy(controls.target).add(off.setLength(len));}   // pull back on narrow screens so the whole record fits
+new ResizeObserver(resize).observe(stage);resize();
+const n=RECORDS.length;
+const clamp=x=>Math.max(0,Math.min(1,x)), ease=t=>t*t*(3-2*t), lerp=(a,b,t)=>a+(b-a)*t;
+// ---- Slot-machine text swap ----
+const measurer=document.createElement('span');measurer.style.cssText='position:absolute;visibility:hidden;white-space:pre;left:-9999px';
+function slot(el,text){   // fade the old word out, swap, fade the new one in
+  if((el.dataset.t??el.textContent)===text)return; el.dataset.t=text;
+  el.style.opacity=0;clearTimeout(el._t);
+  el._t=setTimeout(()=>{if(el.dataset.t!==text)return;el.textContent=text;el.style.opacity=1;},350);
+}
+
+// ---- Processing dial ----
+const dialEl=document.getElementById('dial'), knob=document.getElementById('knob'), dialPtr=document.getElementById('ptr'), dialVal=document.getElementById('dialVal');
+const SWEEP=135;   // degrees either side of straight up
+(()=>{const g=document.getElementById('ticks');for(let i=0;i<=20;i++){const a=(-SWEEP+i*SWEEP*2/20)*Math.PI/180,r1=96,r2=i%10===0?108:102;
+  const l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('class','tick');
+  l.setAttribute('x1',Math.sin(a)*r1);l.setAttribute('y1',-Math.cos(a)*r1);l.setAttribute('x2',Math.sin(a)*r2);l.setAttribute('y2',-Math.cos(a)*r2);g.appendChild(l);}})();
+let processed=0.5;
+function setProcessed(v){processed=Math.max(0,Math.min(1,v));const deg=-SWEEP+processed*SWEEP*2;
+  dialPtr.setAttribute('transform',`rotate(${deg})`);
+  { const r=101, rad=a=>a*Math.PI/180, x=a=>(Math.sin(rad(a))*r).toFixed(2), y=a=>(-Math.cos(rad(a))*r).toFixed(2);
+    document.getElementById('gauge').setAttribute('d', processed<0.004?'':`M${x(-SWEEP)} ${y(-SWEEP)} A${r} ${r} 0 ${deg+SWEEP>180?1:0} 1 ${x(deg)} ${y(deg)}`); }const pc=Math.round(processed*100);knob.setAttribute('aria-valuenow',pc);
+  knob.setAttribute('aria-valuetext',`${pc}% processed`);dialVal.textContent=`${pc}% processed`;audio.mix(processed);}
+let dragging=false;
+function angleTo(e){const r=knob.getBoundingClientRect();return Math.atan2(e.clientX-(r.left+r.width/2),-(e.clientY-(r.top+r.height/2)))*180/Math.PI;}
+const cue=document.getElementById('cue');
+function turned(){cue.classList.add('done');}
+knob.addEventListener('pointerdown',e=>{turned();dragging=true;knob.setPointerCapture(e.pointerId);audio.wake();setProcessed((Math.max(-SWEEP,Math.min(SWEEP,angleTo(e)))+SWEEP)/(SWEEP*2));e.preventDefault();});
+knob.addEventListener('pointermove',e=>{if(!dragging)return;let a=angleTo(e);
+  if(Math.abs(a)>SWEEP)a=processed>.5?SWEEP:-SWEEP;            // the dead zone at the bottom snaps to the nearer end
+  setProcessed((a+SWEEP)/(SWEEP*2));});
+knob.addEventListener('pointerup',()=>dragging=false);knob.addEventListener('pointercancel',()=>dragging=false);
+knob.addEventListener('wheel',e=>{e.preventDefault();turned();setProcessed(processed-e.deltaY*0.0015);},{passive:false});
+knob.addEventListener('keydown',e=>{const k={ArrowUp:.05,ArrowRight:.05,ArrowDown:-.05,ArrowLeft:-.05,PageUp:.2,PageDown:-.2}[e.key];
+  if(k!==undefined){e.preventDefault();e.stopPropagation();turned();audio.wake();setProcessed(processed+k);}
+  if(e.key==='Home'){e.preventDefault();setProcessed(0);} if(e.key==='End'){e.preventDefault();setProcessed(1);}});
+
+// ---- The recording: the same 30-second take, unprocessed and processed, played in sync ----
+// The dial crossfades between the two with an equal-power curve, so the blend never dips in loudness.
+const audio=(()=>{
+  // each record plays its own pair of takes: the dry recording and the same take processed in the venue
+  const TRACKS={rock:{dry:"assets/audio/rock-dry.mp3", wet:"assets/audio/rock-arena.mp3"}, pop:{dry:"assets/audio/pop-dry.mp3", wet:"assets/audio/pop-theatre.mp3"},
+                soul:{dry:"assets/audio/soul-dry.mp3", wet:"assets/audio/soul-arena.mp3"}, folk:{dry:"assets/audio/folk-dry.mp3", wet:"assets/audio/folk-theatre.mp3"}};
+  let ctx=null,master,dry,wet,want=false,mixV=.5,analyser=null,buf=null,freq=null;
+  const decoded={}, loading={}; let playing=null, sources=[], wantTrack='rock';
+  // unpack the embedded audio directly: the viewer does not allow fetch() on data: addresses
+  function bytes(url){const bin=atob(url.slice(url.indexOf(',')+1)),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer;}
+  // embedded audio is unpacked in place (the claude.ai viewer blocks fetch on data: addresses); file paths are fetched
+  function raw(url){return url.startsWith('data:')?Promise.resolve(bytes(url)):fetch(url).then(r=>r.arrayBuffer());}
+  function decode(url){return raw(url).then(ab=>new Promise((ok,no)=>{const p=ctx.decodeAudioData(ab,ok,no);if(p&&p.catch)p.catch(no);}));}
+  function load(name){if(decoded[name]||loading[name])return;const t=TRACKS[name];
+    loading[name]=Promise.all([decode(t.dry),decode(t.wet)]).then(([a,b])=>{decoded[name]={a,b};if(want&&wantTrack===name)start();}).catch(e=>console.warn('audio',e));}
+  function init(){
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain();master.gain.value=0;master.connect(ctx.destination);
+    analyser=ctx.createAnalyser();analyser.fftSize=LIGHT?2048:4096;analyser.smoothingTimeConstant=.25;analyser.minDecibels=-95;analyser.maxDecibels=-20;
+    master.connect(analyser);buf=new Float32Array(analyser.fftSize);freq=new Float32Array(analyser.frequencyBinCount);
+    dry=ctx.createGain();wet=ctx.createGain();dry.connect(master);wet.connect(master);
+    mix(mixV);load(wantTrack);
+  }
+  function stop(){sources.forEach(s=>{try{s.stop();}catch(e){}});sources=[];playing=null;}
+  function start(){
+    if(playing===wantTrack)return;const b=decoded[wantTrack];if(!b){load(wantTrack);return;}
+    stop();playing=wantTrack;
+    const t=ctx.currentTime+0.08;                      // both takes start on the same sample so they stay aligned
+    [[b.a,dry],[b.b,wet]].forEach(([buf,out])=>{const s=ctx.createBufferSource();s.buffer=buf;s.loop=true;s.connect(out);s.start(t);sources.push(s);});
+  }
+  function mix(v){mixV=v;if(!ctx)return;const t=ctx.currentTime;
+    dry.gain.setTargetAtTime(Math.cos(v*Math.PI/2),t,.04);wet.gain.setTargetAtTime(Math.sin(v*Math.PI/2),t,.04);}
+  function wake(){
+    // iPad and iPhone: play as media, so sound isn't muted by silent mode
+    try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+    if(!ctx)init();
+    if(ctx.state!=='running'){ctx.resume();
+      // the classic iOS unlock: start a silent one-sample sound inside the tap itself
+      try{const b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();s.buffer=b;s.connect(ctx.destination);s.start(0);}catch(e){}}
+  }
+  function audible(on,track){
+    if(track&&track!==wantTrack){wantTrack=track;if(ctx){load(track);if(on&&want)start();}}
+    if(on===want)return;want=on;if(!ctx)return;
+    if(on)start();
+    master.gain.setTargetAtTime(on?.9:0,ctx.currentTime,on?.25:.15);}
+  function level(){if(!analyser)return 0;analyser.getFloatTimeDomainData(buf);let e=0;for(let i=0;i<buf.length;i++)e+=buf[i]*buf[i];return Math.sqrt(e/buf.length);}
+  // the analyser listens after the dry/processed blend, so the bars show exactly what is being heard
+  function spectrum(){if(!analyser||!want)return null;analyser.getFloatFrequencyData(freq);return {data:freq,rate:ctx.sampleRate,min:-88,max:-28};}
+  return {mix,wake,audible,level,spectrum};
+})();
+// browsers only let sound start from a tap or click: unlock it on the first one anywhere on the page
+['pointerdown','touchend','click'].forEach(t=>addEventListener(t,()=>{if(soundOn)audio.wake();},{passive:true}));
+let soundOn=true;
+const soundBtn=document.getElementById('sound');
+soundBtn.onclick=()=>{soundOn=!soundOn;soundBtn.setAttribute('aria-pressed',soundOn);soundBtn.textContent=soundOn?'Sound on':'Sound off';if(soundOn)audio.wake();};
+setProcessed(.1);
+
+// ---- Sound bars around the playing record ----
+// A ring of bars on the record's rim, read straight off the music's spectrum: going clockwise from the top,
+// each bar is one band of a log-spaced scale from 40 Hz to 16 kHz, set by its real level in decibels.
+// Unprocessed, the bars reach in across the vinyl; processed, they reach out into the room.
+const BARS=120, waves=new THREE.Group();scene.add(waves);
+// Clean solid bars, as before, with very slightly softened corners
+const barTex=(()=>{const W=64,H=512,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  const r=9;g.fillStyle='#fff';g.beginPath();g.moveTo(r,0);g.lineTo(W-r,0);g.quadraticCurveTo(W,0,W,r);g.lineTo(W,H-r);g.quadraticCurveTo(W,H,W-r,H);
+  g.lineTo(r,H);g.quadraticCurveTo(0,H,0,H-r);g.lineTo(0,r);g.quadraticCurveTo(0,0,r,0);g.fill();
+  const t=new THREE.CanvasTexture(c);return t;})();
+const barGeo=new THREE.PlaneGeometry(1,1);barGeo.translate(0.5,0,0);
+{const uv=barGeo.attributes.uv;for(let k=0;k<uv.count;k++){const u=uv.getX(k),v=uv.getY(k);uv.setXY(k,v,u);}}
+const barMat=()=>new THREE.MeshBasicMaterial({color:0xffffff,map:barTex,transparent:true,opacity:.9,depthWrite:false,side:THREE.DoubleSide});
+const barsIn=new THREE.InstancedMesh(barGeo,barMat(),BARS), barsOut=new THREE.InstancedMesh(barGeo,barMat(),BARS);
+[barsIn,barsOut].forEach(m=>{m.rotation.x=-Math.PI/2;m.renderOrder=6;m.frustumCulled=false;waves.add(m);});
+const jitW=new Float32Array(BARS).fill(1), jitA=new Float32Array(BARS), jitR=new Float32Array(BARS);
+// band edges in FFT bins, filled in once the audio's sample rate is known
+let bandLo=null,bandHi=null;
+const barVal=new Float32Array(BARS), M4=new THREE.Matrix4(), Q=new THREE.Quaternion(), Z=new THREE.Vector3(0,0,1), P=new THREE.Vector3(), Sc=new THREE.Vector3();
+function updateWaves(dt,show){
+  const d=discs[current], vis=show*d.p;
+  waves.visible=vis>0.01; if(!waves.visible)return;
+  waves.position.copy(d.disc.position);waves.position.y+=0.03;
+  const sp=audio.spectrum();
+  if(sp&&!bandLo){bandLo=new Int32Array(BARS);bandHi=new Int32Array(BARS);const hz=sp.rate/2/sp.data.length;
+    for(let i=0;i<BARS;i++){const f0=40*Math.pow(16000/40,i/BARS),f1=40*Math.pow(16000/40,(i+1)/BARS);
+      bandLo[i]=Math.max(1,Math.floor(f0/hz));bandHi[i]=Math.max(bandLo[i]+1,Math.ceil(f1/hz));}}
+  for(let i=0;i<BARS;i++){
+    let v=0;
+    if(sp){let pw=0;for(let b=bandLo[i];b<bandHi[i];b++)pw+=Math.pow(10,sp.data[b]/10);      // average power across the band
+      const db=10*Math.log10(pw/(bandHi[i]-bandLo[i])+1e-12);
+      v=Math.max(0,Math.min(1,(db-sp.min)/(sp.max-sp.min)));}
+    barVal[i]+=(v-barVal[i])*Math.min(dt*(v>barVal[i]?40:14),1);                      // fast attack, quick release: stays true to the beat
+  }
+  const col=new THREE.Color(d.rec.paper).lerp(new THREE.Color(0xffffff),.5);
+  barsIn.material.color.copy(col);barsOut.material.color.copy(col);
+  barsIn.material.opacity=barsOut.material.opacity=.9*vis;
+  const step=2*Math.PI/BARS, w0=(2*Math.PI*R/BARS)*0.45;
+  for(let i=0;i<BARS;i++){
+    const a=-Math.PI/2+(i+.5+jitA[i])*step, L=0.02+barVal[i]*0.85, w=w0*jitW[i];
+    const li=Math.max(1e-4,L*(1-processed)*0.85), lo=Math.max(1e-4,L*processed);
+    P.set(Math.cos(a)*(R-0.02+jitR[i]),Math.sin(a)*(R-0.02+jitR[i]),0);Q.setFromAxisAngle(Z,a+Math.PI);Sc.set(li,w,1);
+    M4.compose(P,Q,Sc);barsIn.setMatrixAt(i,M4);
+    P.set(Math.cos(a)*(R+0.04+jitR[i]),Math.sin(a)*(R+0.04+jitR[i]),0);Q.setFromAxisAngle(Z,a);Sc.set(lo,w,1);
+    M4.compose(P,Q,Sc);barsOut.setMatrixAt(i,M4);
+  }
+  barsIn.instanceMatrix.needsUpdate=barsOut.instanceMatrix.needsUpdate=true;
+}
+
+function tick(now){
+  const dt=Math.min((now-last)/1000,.05);last=now;
+  const target=playing?rpm/60*Math.PI*2*(reduce?.15:0.35):0;   // a slow, calm spin (about 12 turns a minute)
+  speed+=(target-speed)*Math.min(dt*2.5,1);
+  // Switching runs in three beats: the old record slides back into its sleeve, the sleeves glide,
+  // then the new record slides out and settles in front while its sleeve stands up behind it.
+  const allHome=discs.every((d,i)=>i===current||d.p<0.02);
+  let delta=current-carousel; delta=((delta%n)+n+n/2)%n-n/2;
+  if(allHome)carousel+=delta*(reduce?1:Math.min(dt*3.6,1));   // the earlier soft glide; the longer path means records now leave the screen before slowing
+  if(allHome&&Math.abs(delta)<1e-3)carousel+=delta;   // land exactly, so the scene can come to rest
+  const arrived=Math.abs(delta)<0.02;
+  const rate=reduce?100:1/1.6;                          // a full slide-out takes 1.6 s
+  flip+=(flipTarget-flip)*Math.min(dt*5,1);
+  discs.forEach((d,i)=>{
+    const want=(i===current&&arrived&&opened)?1:0;
+    d.p+=Math.sign(want-d.p)*Math.min(Math.abs(want-d.p),dt*rate*(want?1:1.6));
+    let off=i-carousel; off=((off%n)+n+n/2)%n-n/2;      // wrap to −1.5…1.5
+    const a=Math.min(Math.abs(off),1.2), tilt=off*0.35;
+    const out=ease(clamp(d.p/0.5)), q=ease(clamp((d.p-0.38)/0.62));
+    // sleeve: from its carousel spot (flat) to a backdrop standing behind the platter
+    // switching runs along an arch: the next record climbs in from the bottom right, eases over the top, and the last one drops away to the bottom left
+    const arch=Math.sqrt(off*off+0.06)-Math.sqrt(0.06);   // a rounded peak with straight flanks
+    const sx=off*DIAG_X-PEEK*0.5-out*1.1, sy=a*0.25, sz=arch*DIAG_Z;   // next record enters from the right and moves left; the sleeve eases left as the record leaves it
+    // once the record is out, the sleeve glides off the left edge of the screen
+    d.sleeve.position.set(sx-q*7.5, sy+Math.sin(q*Math.PI)*0.25, sz-q*0.8);
+    d.sleeve.rotation.set(0, q*0.35, tilt+q*0.12);
+    d.sleeve.visible=Math.abs(off)<1.4 && q<0.999;
+    const recVisible=Math.abs(off)<1.4;
+    // record: peeks 0.55 out of the open edge, slides fully out, then glides to the centre
+    const lx=PEEK+out*(SLEEVE+0.1-PEEK);          // sticks out of the open edge, then slides all the way out
+    const ix=sx+lx*Math.cos(tilt), iy=sy+lx*Math.sin(tilt)+0.002;
+    const fl=flip*q;
+    // once out, the record makes room for the dial: left of it on wide screens, above it on narrow ones
+    const wide=camera.aspect>1.15, fx=wide?-0.85:0, fz=wide?0:-0.75;
+    d.disc.position.set(lerp(ix,fx,q), lerp(iy,0,q)+Math.sin(fl)*0.6, lerp(sz,fz,q));
+    d.disc.rotation.set(0,0,lerp(tilt,0,q)+fl);
+    d.disc.visible=recVisible;
+    const heading=(i===current&&opened);
+    if(heading) d.spin.rotation.y-=speed*dt*q;
+    else{ // on its way back (or resting) the record rolls forward to the nearest upright angle, so the print always reads the right way up
+      const T=Math.PI*2, up=Math.floor(d.spin.rotation.y/T+1e-6)*T;
+      d.spin.rotation.y+= (up-d.spin.rotation.y)*Math.min(dt*3,1);
+      if(Math.abs(up-d.spin.rotation.y)<1e-4)d.spin.rotation.y=0;   // keep the number small
+    }
+  });
+  updateWaves(dt, (opened&&playing&&soundOn)?1:0);
+  { const out=discs[current].p>0.92&&opened;
+    dialEl.classList.toggle('on',out);
+    if(!dialEl.classList.contains('on')&&!out){} else if(camera.aspect>1.15){   // wide screens: dial sits just right of the record, its centre level with the record's centre
+      const d=discs[current], c=d.disc.position.clone(), e=c.clone().add(new THREE.Vector3(R,0,0)), W=stage.clientWidth, H=stage.clientHeight;
+      c.project(camera);e.project(camera);
+      // dial centre sits two and a half record-radii right of the record's centre
+      const cxp=(c.x*.5+.5)*W, rp=(e.x-c.x)*.5*W;
+      let x=cxp+2.5*rp-110, y=(-c.y*.5+.5)*H;
+      // keep the whole dial on screen and clear of the right arrow, even when the view is zoomed or turned
+      if(!isFinite(x)||!isFinite(y)){x=W-220-96;y=H/2;}
+      x=Math.min(Math.max(x,W*.5),W-220-96); y=Math.min(Math.max(y,110),H-150);
+      placeDial(x,y);
+    } else if(stage.clientWidth>760){   // tall screens such as an iPad held upright: dial sits centred below the record
+      const d=discs[current], c=d.disc.position.clone(), b=c.clone().add(new THREE.Vector3(0,0,R*2.05)), W=stage.clientWidth, H=stage.clientHeight;
+      c.project(camera);b.project(camera);
+      let x=(c.x*.5+.5)*W-110, y=(-b.y*.5+.5)*H;
+      if(!isFinite(x)||!isFinite(y)){x=W/2-110;y=H*.75;}
+      y=Math.min(Math.max(y,160),H-170);
+      placeDial(x,y);
+    } else {dialXY='';dialEl.style.left=dialEl.style.top=dialEl.style.right='';}
+    audio.audible(out&&playing&&soundOn, RECORDS[current].track); }
+  if(!isFinite(camera.position.x+camera.position.y+camera.position.z)){camera.position.set(0,8.6,-0.2);resize();}  // never stay lost
+  // draw only while something moves; an idle screen costs almost nothing
+  const busy=Math.abs(delta)>1e-4||discs.some(d=>(d.p>0&&d.p<1)||(Math.abs(d.spin.rotation.y)>1e-4&&!(d.p>=1&&speed<1e-3)))
+    ||(speed>1e-3&&discs[current].p>0)||waves.visible||Math.abs(flipTarget-flip)>1e-4;
+  if(Math.abs(bgNow.r-bgTo.r)+Math.abs(bgNow.g-bgTo.g)+Math.abs(bgNow.b-bgTo.b)>1e-3){bgNow.lerp(bgTo,Math.min(dt*3.2,1));renderer.setClearColor(bgNow,1);kick(2);}
+  if(busy)kick(2);
+  if(wakeFrames>0){wakeFrames--;controls.update();renderer.render(scene,camera);}
+  requestAnimationFrame(tick);
+}
+let dialXY='';function placeDial(x,y){const k=Math.round(x)+','+Math.round(y);if(k===dialXY)return;dialXY=k;   // touch the page layout only when the dial actually moves
+  dialEl.style.left=Math.round(x)+'px';dialEl.style.top=Math.round(y)+'px';dialEl.style.right='auto';}
+requestAnimationFrame(tick);
+})();
+</script>
+
+</body>
+</html>
